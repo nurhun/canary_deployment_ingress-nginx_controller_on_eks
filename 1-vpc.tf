@@ -19,6 +19,7 @@ module "vpc" {
   private_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k)]
   public_subnets  = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 4)]
 
+  # The load balancer controller uses these tags to discover subnets in which it can create load balancers. 
   public_subnet_tags = {
     "kubernetes.io/role/elb" = "1"
   }
