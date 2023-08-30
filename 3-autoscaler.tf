@@ -1,3 +1,5 @@
+##################### 3-autoscaler #####################
+
 module "cluster_autoscaler_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "5.3.1"
@@ -22,25 +24,14 @@ resource "aws_iam_role_policy_attachment" "node-groups-autoscaling" {
   role       = each.value.iam_role_name
 }
 
-provider "helm" {
-  kubernetes {
-    host                   = data.aws_eks_cluster.default.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.default.certificate_authority[0].data)
-    exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      args        = ["eks", "get-token", "--cluster-name", data.aws_eks_cluster.default.id]
-      command     = "aws"
-    }
-  }
-}
 
 resource "helm_release" "cluster_autoscalerr" {
-  name = "cluster-autoscaler"
+  name      = "cluster-autoscaler"
+  namespace = "kube-system"
 
   repository = "https://kubernetes.github.io/autoscaler"
   chart      = "cluster-autoscaler"
-  namespace  = "kube-system"
-  # version    = "1.4.4"
+  version    = "9.29.2"
 
   set {
     name  = "autoDiscovery.clusterName"
@@ -58,6 +49,6 @@ resource "helm_release" "cluster_autoscalerr" {
   }
 
   depends_on = [
-    module.cluster_autoscaler_irsa_role,
+    module.eks,
   ]
 }

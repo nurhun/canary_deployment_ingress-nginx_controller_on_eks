@@ -1,13 +1,19 @@
+##################### 2-eks #####################
+
 variable "cluster_name" {
   default = "my-eks"
+}
+
+variable "cluster_version" {
+  default = "1.25"
 }
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "18.29.0"
 
-  cluster_name    = "my-eks"
-  cluster_version = "1.25"
+  cluster_name    = var.cluster_name
+  cluster_version = var.cluster_version
 
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = true
@@ -25,6 +31,7 @@ module "eks" {
     vpc-cni = {
       most_recent = true
     }
+
   }
 
   # Determines whether to create an OpenID Connect Provider for EKS to enable IAM roles for service accounts (IRSA).	
@@ -37,8 +44,8 @@ module "eks" {
   eks_managed_node_groups = {
     general = {
       desired_size = 2
-      min_size     = 2
-      max_size     = 2
+      min_size     = 1
+      max_size     = 5
 
       labels = {
         role = "general"
@@ -49,85 +56,24 @@ module "eks" {
 
     }
 
-    # spot = {
-    #   desired_size = 1
-    #   min_size     = 1
-    #   max_size     = 5
+    spot = {
+      desired_size = 1
+      min_size     = 1
+      max_size     = 5
 
-    #   labels = {
-    #     role = "spot"
-    #   }
+      labels = {
+        role = "spot"
+      }
 
-    #   #   taints = [{
-    #   #     key    = "market"
-    #   #     value  = "spot"
-    #   #     effect = "NO_SCHEDULE"
-    #   #   }]
-
-    #   instance_types = ["t3.micro"]
-    #   capacity_type  = "SPOT"
-    # }
+      instance_types = ["t3.micro"]
+      capacity_type  = "SPOT"
+    }
   }
 
-  #   # Fargate Profile(s)
-  #   fargate_profiles = {
-  #     default = {
-  #       name = "default"
-  #       selectors = [
-  #         {
-  #           namespace = "kube-system"
-  #           labels = {
-  #             k8s-app = "kube-dns"
-  #           }
-  #         },
-  #         {
-  #           namespace = "default"
-  #         }
-  #       ]
-
-  #       tags = {
-  #         Owner = "test"
-  #       }
-
-  #       timeouts = {
-  #         create = "20m"
-  #         delete = "20m"
-  #       }
-  #     }
-  #   }
-
-
-  #   # aws-auth configmap
-  #   manage_aws_auth_configmap = true
-
-  #   aws_auth_roles = [
-  #     {
-  #       rolearn  = "arn:aws:iam::111122223333:role/eks-admin"
-  #       username = "eks-admin"
-  #       groups   = ["system:masters"]
-  #     },
-  #   ]
-
-  #   aws_auth_users = [
-  #     {
-  #       userarn  = "arn:aws:iam::426363595269:user/admin"
-  #       username = "admin"
-  #       groups   = ["system:masters"]
-  #     },
-  #     {
-  #       userarn  = "arn:aws:iam::66666666666:user/user2"
-  #       username = "user2"
-  #       groups   = ["system:masters"]
-  #     },
-  #   ]
-
-  #   aws_auth_accounts = [
-  #     "777777777777",
-  #     "888888888888",
-  #   ]
-
-  # Allow access from the EKS control plane to the webhook port of the AWS loadbalancer controller.
+  # List of additional security group rules to add to the node security group created.
+  # Set "source_cluster_security_group = true" inside rules to set the cluster_security_group as source
   node_security_group_additional_rules = {
+
     ingress_allow_access_from_control_plane = {
       type                          = "ingress"
       protocol                      = "tcp"
@@ -138,7 +84,7 @@ module "eks" {
     }
 
     ingress_self_all = {
-      description = "Node to node all ports/protocols"
+      description = "Node to Node all ports/protocols ingress allowed for the node SG"
       protocol    = "-1"
       from_port   = 0
       to_port     = 0
@@ -147,7 +93,7 @@ module "eks" {
     }
 
     egress_self_all = {
-      description = "Node to node all ports/protocols"
+      description = "Node to Node all ports/protocols egress allowed for the node SG"
       protocol    = "-1"
       from_port   = 0
       to_port     = 0
@@ -155,49 +101,62 @@ module "eks" {
       self        = true
     }
 
-    # EKS node shared security group -- my-eks-node-xxxxxxx
-
-    # By default EKS compute mode group, will have the default cluster Security Group attached which is created by AWS.
-    # Even if you provide additional security group to EKS cluster during the creation, that additional security group will not be attached to compute instances.
-    # So, to get this working, you have to use Launch Templates.
-
+    cluster_to_node = {
+      description                   = "Allow access from control plane to nodes to communicate with the ingress controller for webhook admission."
+      protocol                      = "tcp"
+      from_port                     = 8443
+      to_port                       = 8443
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
   }
 
   tags = {
     Environment = "devops-test"
   }
+
+  depends_on = [
+    module.vpc
+  ]
 }
 
 
-# You need to authorize terraform to access Kubernetes API and modify aws-auth configmap. To do that, you need to define terraform kubernetes provider.
+# Enabling EKS CSI driver to enable prometheus PVC to be processed. 
+data "aws_iam_policy_document" "csi" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
 
-# https://github.com/terraform-aws-modules/terraform-aws-eks/issues/2009
-data "aws_eks_cluster" "default" {
-  name = module.eks.cluster_id
-}
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(module.eks.oidc_provider, "https://", "")}:sub"
+      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
+    }
 
-data "aws_eks_cluster_auth" "default" {
-  name = module.eks.cluster_id
-}
-provider "kubernetes" {
-  host                   = data.aws_eks_cluster.default.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.default.certificate_authority[0].data)
-  # token                  = data.aws_eks_cluster_auth.default.token
-
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    args        = ["eks", "get-token", "--cluster-name", data.aws_eks_cluster.default.id]
-    command     = "aws"
+    principals {
+      identifiers = [module.eks.oidc_provider_arn]
+      type        = "Federated"
+    }
   }
+
+  depends_on = [
+    module.eks
+  ]
 }
 
-output "eks_managed_node_groups" {
-  description = "Map of attribute maps for all EKS managed node groups created"
-  value       = module.eks.eks_managed_node_groups
+resource "aws_iam_role" "eks_ebs_csi_driver" {
+  assume_role_policy = data.aws_iam_policy_document.csi.json
+  name               = "eks-ebs-csi-driver"
 }
 
-output "eks_managed_node_groups_arns" {
-  description = "Map of attribute maps for all EKS managed node groups created"
-  value = [for group_key, group_value in module.eks.eks_managed_node_groups :
-  group_value.iam_role_arn]
+resource "aws_iam_role_policy_attachment" "amazon_ebs_csi_driver" {
+  role       = aws_iam_role.eks_ebs_csi_driver.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
+resource "aws_eks_addon" "csi_driver" {
+  cluster_name             = module.eks.cluster_id
+  addon_name               = "aws-ebs-csi-driver"
+  addon_version            = "v1.22.0-eksbuild.1"
+  service_account_role_arn = aws_iam_role.eks_ebs_csi_driver.arn
 }

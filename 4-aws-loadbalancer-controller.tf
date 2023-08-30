@@ -1,3 +1,5 @@
+##################### 4-aws-loadbalancer-controller #####################
+
 # IAM role for the load balancer controller with permissions to create and manage AWS load balancers.
 module "aws_load_balancer_controller_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
@@ -46,6 +48,10 @@ resource "helm_release" "aws_load_balancer_controller" {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = module.aws_load_balancer_controller_irsa_role.iam_role_arn
   }
+
+  depends_on = [
+    helm_release.cluster_autoscalerr,
+  ]
 }
 
 
