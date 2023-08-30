@@ -65,7 +65,43 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "20Gi"
   }
 
+
+  # Grafana dashboard
+  set {
+    name  = "grafana.dashboardProviders.dashboardproviders.yaml.providers[0].name"
+    value = "default"
+  }
+
+  set {
+    name  = "grafana.dashboardProviders.dashboardproviders.yaml.providers[0].orgId"
+    value = "1"
+  }
+
+  set {
+    name  = "grafana.dashboardProviders.dashboardproviders.yaml.providers[0].type"
+    value = "file"
+  }
+  set {
+    name  = "grafana.dashboardProviders.dashboardproviders.yaml.providers[0].disableDeletion"
+    value = false
+  }
+
+  set {
+    name  = "grafana.dashboardProviders.dashboardproviders.yaml.providers[0].editable"
+    value = true
+  }
+
+  set {
+    name  = "grafana.dashboardProviders.dashboardproviders.yaml.providers[0].options.path"
+    value = "/var/lib/grafana/dashboards/default"
+  }
+  
+  set {
+    name  = "grafana.dashboardsConfigMaps.default"
+    value = "app-nginx-http-request-total"
+  }
+
   depends_on = [
-    helm_release.ingress_nginx,
+    kubectl_manifest.grafana_dashboard,
   ]
 }
