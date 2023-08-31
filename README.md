@@ -48,16 +48,18 @@ https://github.com/nurhun/canary_deployment_ingress-nginx_controller_on_eks/asse
         password: admin
         email:    admin@admin.com
         ```
-
-  1. To generate traffic and assess requests, replace <ip_address> with the outputted IP Address in the following command:
+  5. To generate traffic and assess requests, replace <ip_address> with the outputted IP Address in the following command:
         ```
         for i in $(seq 1 1000); do curl -s <ip_address>.nip.io > /dev/null 2>&1 ;done
         ```
-  2. Explore the Grafana dashboard to observe the distribution of requests between the primary deployment and the canary deployment. A pre-deployed dashboard is included in the stack.
-  3. Cleanup
+  6. Explore the Grafana dashboard to observe the distribution of requests between the primary deployment and the canary deployment. A pre-deployed dashboard is included in the stack.
+  7. Cleanup
         ```
         terraform destroy
         ```
+
+## Deployment Manifests
+* For more convenient browsing of deployment manifests, you can find it in the App repo [here](https://github.com/nurhun/django_rest_framework_movies_apis_w_react_frontend) at Canary_Deployments dir.
 
 ## Out of scope:
 * non-http protocol.
