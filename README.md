@@ -28,7 +28,7 @@ https://github.com/nurhun/canary_deployment_ingress-nginx_controller_on_eks/asse
 * A main deployment of the application with its service and ingress.
 * A canary deployment with its service and ingress that will take a weighted amount of requests instead of the main deployment.
 * It's essential to ensure that both ingresses share the same host.
-    ![](Requestflow.excalidraw.png)
+    ![](Requestflow.png)
 
 ## Usage:
   1. Initialize terraform and get the required modules
